@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人员编号记录</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+body{background:#f4f5f7;padding:15px;max-width:500px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:15px;margin-bottom:12px}
+h3{margin-bottom:10px;font-size:16px}
+input,select,textarea,button{
+  width:100%;padding:10px 12px;border:1px solid #ddd;
+  border-radius:8px;margin-bottom:8px;font-size:14px
+}
+button{
+  background:#007aff;color:#fff;
+  border:none;font-size:15px
+}
+#result{margin-top:10px}
+.item{
+  padding:12px;border-left:4px solid #007aff;background:#fff;
+  border-radius:8px;margin-bottom:8px;
+  position:relative;
+}
+.name{font-weight:bold;margin-bottom:6px;font-size:16px}
+.nums{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.tag{
+  background:#007aff;color:#fff;padding:4px 8px;
+  border-radius:6px;font-size:12px
+}
+.remark{font-size:12px;color:#666}
+.empty{color:#999;text-align:center;padding:10px}
+.search-row{display:flex;gap:8px}
+.search-row input{flex:1;margin-bottom:0}
+.search-row button{width:auto;margin-bottom:0}
+
+.num-grid{
+  display:grid;
+  grid-template-columns:repeat(5, 1fr);
+  gap:8px;
+  margin-bottom:8px;
+}
+.num-item{
+  padding:10px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  text-align:center;
+  cursor:pointer;
+  background:#fff;
+}
+.num-item.selected{
+  background:#007aff;
+  color:#fff;
+  border-color:#007aff;
+}
+
+.date-title{
+  font-size:14px;
+  color:#666;
+  margin:12px 0 8px 0;
+  font-weight:500;
+}
+
+.collapsible{
+  background:#f0f0f0;
+  cursor:pointer;
+  padding:12px;
+  width:100%;
+  border:none;
+  text-align:left;
+  outline:none;
+  font-size:14px;
+  border-radius:8px;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.collapsible:after{
+  content: '▼';
+  font-size:12px;
+  color:#666;
+  transition: transform 0.2s;
+}
+.collapsible.active:after{
+  transform: rotate(180deg);
+}
+.collapsible-content{
+  max-height:0;
+  overflow:hidden;
+  transition: max-height 0.3s ease-out;
+  background:#fff;
+  border-radius:0 0 8px 8px;
+}
+
+.delete-btn{
+  position:absolute;
+  top:8px;
+  right:8px;
+  background:#ff3b30;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:4px 8px;
+  font-size:12px;
+  cursor:pointer;
+  width:auto;
+}
+.clear-row{
+  text-align:right;
+  margin-top:8px;
+}
+.clear-btn{
+  background:#ff3b30;
+  color:#fff;
+  border:none;
+  border-radius:8px;
+  padding:8px 16px;
+  font-size:14px;
+  cursor:pointer;
+  width:auto;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h3>🔍 搜索</h3>
+  <div class="search-row">
+    <input id="searchName" placeholder="输入名字搜索..." onkeydown="if(event.key==='Enter') searchByName()">
+    <button onclick="searchByName()">按姓名搜索</button>
+  </div>
+  <div class="search-row" style="margin-top:8px">
+    <input id="searchDate" placeholder="日期（YYYY-MM-DD）" onkeydown="if(event.key==='Enter') searchByDate()">
+    <button onclick="searchByDate()">按日期搜索</button>
+  </div>
+  <div class="clear-row">
+    <button class="clear-btn" onclick="clearAllData()">清空全部记录</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>➕ 添加记录</h3>
+  <input id="name" placeholder="姓名">
+
+  <button type="button" class="collapsible" id="numCollapsible">选择编号（点击展开/折叠）</button>
+  <div class="collapsible-content">
+    <div id="numGrid" class="num-grid"></div>
+  </div>
+
+  <input id="color" value="#007aff" placeholder="颜色">
+  <textarea id="remark" rows="2" placeholder="备注"></textarea>
+  <button onclick="add()">保存</button>
+</div>
+
+<div id="result"></div>
+
+<script>
+function initCollapsible(){
+  let coll = document.getElementById('numCollapsible')
+  let content = coll.nextElementSibling
+  coll.addEventListener('click', function(){
+    this.classList.toggle('active')
+    if(content.style.maxHeight){
+      content.style.maxHeight = null
+    }else{
+      content.style.maxHeight = content.scrollHeight + 'px'
+    }
+  })
+}
+
+function getTodayStr(){
+  let d = new Date()
+  let year = d.getFullYear()
+  let month = String(d.getMonth()+1).padStart(2,'0')
+  let day = String(d.getDate()).padStart(2,'0')
+  return `${year}-${month}-${day}`
+}
+
+function initNumGrid(){
+  let grid = document.getElementById('numGrid')
+  for(let i=1;i<=200;i++){
+    let item = document.createElement('div')
+    item.className = 'num-item'
+    item.textContent = i
+    item.dataset.value = i
+    item.onclick = function(){
+      this.classList.toggle('selected')
+    }
+    grid.appendChild(item)
+  }
+}
+
+function load(){
+  let d = localStorage.getItem('mydata')
+  return d ? JSON.parse(d) : []
+}
+function save(data){
+  localStorage.setItem('mydata', JSON.stringify(data))
+}
+
+function add(){
+  let name = document.getElementById('name').value.trim()
+  let selectedItems = Array.from(document.querySelectorAll('.num-item.selected'))
+  let nums = selectedItems.map(el => el.dataset.value).join(',')
+  let color = document.getElementById('color').value.trim()
+  let remark = document.getElementById('remark').value.trim()
+
+  if(!name || !nums){
+    alert('请填写姓名并选择编号')
+    return
+  }
+
+  let arr = load()
+  arr.push({
+    name, nums, color, remark, date: getTodayStr()
+  })
+  save(arr)
+
+  document.getElementById('name').value = ''
+  document.querySelectorAll('.num-item.selected').forEach(el => el.classList.remove('selected'))
+  document.getElementById('remark').value = ''
+
+  let coll = document.getElementById('numCollapsible')
+  let content = coll.nextElementSibling
+  coll.classList.remove('active')
+  content.style.maxHeight = null
+
+  showToday()
+}
+
+function showToday(){
+  let today = getTodayStr()
+  let arr = load()
+  let todayList = arr.filter(item => item.date === today)
+  renderList(todayList, true)
+}
+
+function searchByName(){
+  let key = document.getElementById('searchName').value.trim()
+  let arr = load()
+  if(!key){
+    showToday()
+    return
+  }
+  let result = arr.filter(item => item.name === key)
+  renderList(result, false)
+}
+
+function searchByDate(){
+  let key = document.getElementById('searchDate').value.trim()
+  let arr = load()
+  if(!key){
+    showToday()
+    return
+  }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(key)){
+    alert('格式：YYYY-MM-DD')
+    return
+  }
+  let result = arr.filter(item => item.date === key)
+  renderList(result, false)
+}
+
+function deleteItem(index){
+  let arr = load()
+  arr.splice(index, 1)
+  save(arr)
+  showToday()
+}
+
+function clearAllData(){
+  if(confirm('确定清空所有记录？')){
+    localStorage.removeItem('mydata')
+    showToday()
+  }
+}
+
+function renderList(list, isToday){
+  let box = document.getElementById('result')
+  if(list.length === 0){
+    box.innerHTML = '<div class="empty">暂无记录</div>'
+    return
+  }
+  let html = ''
+  if(isToday){
+    html += `<div class="date-title">今日（${getTodayStr()}）已保存记录</div>`
+  }
+  list.forEach((item, index) => {
+    html += `
+    <div class="item" style="border-left-color:${item.color}">
+      <button class="delete-btn" onclick="deleteItem(${index})">删除</button>
+      <div class="name">${item.name}</div>
+      <div class="nums">`
+    let numArr = item.nums.split(',')
+    numArr.forEach(n => {
+      html += `<span class="tag" style="background:${item.color}">${n}</span>`
+    })
+    html += `
+      </div>
+      <div class="remark">${item.remark ? '备注：'+item.remark : ''}</div>
+    </div>`
+  })
+  box.innerHTML = html
+}
+
+window.onload = function(){
+  initCollapsible()
+  initNumGrid()
+  showToday()
+}
+</script>
+</body>
+</html>
